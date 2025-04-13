@@ -1,16 +1,14 @@
-from clemcore.clemgame.benchmark import GameBenchmark
-from clemcore.clemgame.master import GameMaster
-from clemcore.clemgame import Player
+from clemcore.clemgame import GameSpec, GameMaster, GameBenchmark, Player, DialogueGameMaster
 from clemcore.backends.model_registry import Model
 from typing import Dict, Tuple, List
 import logging
-from clemcore.clemgame.master import DialogueGameMaster, Player
 
 logger = logging.getLogger(__name__)
 
+
 class SnakeGameBenchmark(GameBenchmark):
-    def __init__(self):
-        super().__init__('SNAKE')
+    def __init__(self, game_spec: GameSpec):
+        super().__init__(game_spec)
 
     def get_description(self):
         return "Plays a simple game of snake with one player."
@@ -20,7 +18,6 @@ class SnakeGameBenchmark(GameBenchmark):
 
     def create_game_master(self, experiment: Dict, player_models: List[Model]) -> GameMaster:
         return Snake(self.game_name, self.game_path, experiment, player_models)
-
 
 
 class Navigator(Player):
@@ -44,7 +41,7 @@ class Snake(DialogueGameMaster):
     """
     
     def __init__(self, game_name: str, game_path: str, experiment: Dict, player_models: List[Model] = None):
-        super().__init__(name, path, experiment, player_models)
+        super().__init__(game_name, game_path, experiment, player_models)
         # READ IN SETTINGS FROM EXPERIMENT/INSTANCE.JSON???
 
     def _on_setup(self, **game_instance):

@@ -1,6 +1,6 @@
+import os
 import random
-import string
-from clemcore.clemgame.instances import GameInstanceGenerator
+from clemcore.clemgame import GameInstanceGenerator
 
 MAX_TURNS = 15
 N_INSTANCES = 10
@@ -10,34 +10,43 @@ SEED = -413  # spring, gymnopedie, air :)
 
 class SnakeInstanceGenerator(GameInstanceGenerator):
     def __init__(self):
-        super().__init__(GAME_NAME)
+        super().__init__(os.path.dirname(os.path.abspath(__file__)))
 
     def on_generate(self):
-        matrices = self.load_file('resources/matrices.txt').strip('\n').split('\n')
-        initial_prompt = self.load_template('resources/initial_prompts/initial_prompt_a')
+        print("current path:", self.game_path)
+        # matrices = self.load_file('resources/matrices.txt').strip('\n').split('\n')
+        matrices = ['[][][]\n[][][]\n[][][]\n']
+        # print(matrices)
+
+        out = { 'experiments': [] }
 
         for matrix in matrices:
             experiment = self.add_experiment(matrix)
+            experiment['max_turns'] = MAX_TURNS
+            experiment['describer_initial_prompt'] = self.load_template('resources/initial_prompts/describer_prompt')
+            experiment['navigator_initial_prompt'] = self.load_template('resources/initial_prompts/navigator_prompt')
+            experiment['describer_tag'] = 'MATRIX:'
+            experiment['navigator_tag'] = 'DIRECTION:'
 
+            instances = []
             for game_id in range(N_INSTANCES):
                 instance = self.add_game_instance(experiment, game_id)
                 
-                max_turns = MAX_TURNS
-                instance['max_turns'] = max_turns
-                
-                snake_start_loc = random.choice(range(9))
+                snake_start_loc = random.choice(range(8))
                 instance['snake_start_loc'] = snake_start_loc
-                prey_start_loc = random.choice(list(range(9)).remove(snake_start_loc))
+
+                possible_prey_locs = list(range(8))
+                possible_prey_locs.remove(snake_start_loc)
+                prey_start_loc = random.choice(possible_prey_locs)
                 instance['prey_start_loc'] = prey_start_loc
 
-                instance['describer_tag'] = 'MATRIX:'
-                instance['navigator_tag'] = 'DIRECTION:'
-
                 # navigator response pattern (some regex here?)
-                # instance['navigator_response_pattern'] = 
-                
-                instance['describer_initial_prompt'] = self.load_template('resources/initial_prompts/describer_prompt')
-                instance['navigator_initial_prompt'] = self.load_template('resources/initial_prompts/navigator_prompt')
+                # instance['navigator_response_pattern'] =
+
+                instances.append(instance)
+
+            experiment['game_instances'] = instances
+            out['experiments'].append(experiment)
 
 
 if __name__ == '__main__':
