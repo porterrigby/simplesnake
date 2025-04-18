@@ -14,8 +14,8 @@ class SimpleSnakeInstanceGenerator(GameInstanceGenerator):
 
     def on_generate(self):
         print("current path:", self.game_path)
-        # matrices = self.load_file('resources/matrices.txt').strip('\n').split('\n')
-        matrices = ['3x3']
+        matrices = self.load_file('resources/matrices.txt').strip('\n').split('\n')
+        # matrices = ['3x3']
         print(matrices)
 
         for matrix in matrices:

@@ -101,6 +101,9 @@ class Describer(Player):
 
     def _custom_response(self, context: Dict) -> str:
         content = context['content']
+
+        print('received context: ', content)
+
         return self.gameboard.update_gameboard(content)
         # return "[][][*]\n[][][]\n[][s][]"
 
@@ -135,7 +138,7 @@ class SimpleSnake(DialogueGameMaster):
 
     def _on_before_game(self):
         self.set_context_for(player=self.navigator, content=self.navigator_initial_prompt)
-        self.set_context_for(player=self.describer, content='left')
+        # self.set_context_for(player=self.describer, content='left')
 
     def _does_game_proceed(self):
         """Proceed as long as the snake does not occupy the same gridspace as the prey."""
@@ -156,7 +159,6 @@ class SimpleSnake(DialogueGameMaster):
         return True
 
     def _parse_response(self, player: Player, response: str) -> str:
-        print("parsing...")
         # if player == self.describer:
         if player == self.navigator:
             lowered = response.lower()
@@ -171,7 +173,6 @@ class SimpleSnake(DialogueGameMaster):
         return response
 
     def _validate_player_response(self, player: Player, utterance: str) -> bool:
-        print("validating...")
         # reset flags
         self.invalid_response = False
         self.invalid_format = False
@@ -185,7 +186,7 @@ class SimpleSnake(DialogueGameMaster):
                 self.invalid_format = True
                 return False 
         elif player == self.describer:
-            #validate response format
+            # handle end-of-game describer response
             if utterance == 'invalid state':
                 self.log_to_self("game over", "Game over.")
                 self.invalid_state = True
