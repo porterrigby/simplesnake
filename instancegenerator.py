@@ -20,11 +20,10 @@ class SimpleSnakeInstanceGenerator(GameInstanceGenerator):
 
         for matrix in matrices:
             experiment = self.add_experiment(matrix)
+            experiment['dim'] = int(matrix[0])
             experiment['max_turns'] = MAX_TURNS
             experiment['describer_initial_prompt'] = self.load_template('resources/initial_prompts/describer_prompt')
             experiment['navigator_initial_prompt'] = self.load_template('resources/initial_prompts/navigator_prompt')
-            experiment['describer_tag'] = 'MATRIX:'
-            experiment['navigator_tag'] = 'DIRECTION:'
 
             instances = []
             for game_id in range(N_INSTANCES):

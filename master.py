@@ -1,11 +1,13 @@
+import re
 import numpy as np
 from clemcore.clemgame import GameSpec, GameMaster, GameBenchmark, GameScorer, Player, DialogueGameMaster
-from clemcore.backends.model_registry import Model
+from clemcore.backends.model_registry import Model, CustomResponseModel
 from typing import Dict, List
 from clemcore.clemgame.metrics import METRIC_REQUEST_COUNT_VIOLATED, METRIC_REQUEST_COUNT_PARSED, METRIC_REQUEST_COUNT, \
                                         METRIC_REQUEST_SUCCESS, METRIC_ABORTED, BENCH_SCORE, METRIC_SUCCESS, METRIC_LOSE
 
 import logging
+
 
 logger = logging.getLogger(__name__)
 
@@ -27,20 +29,80 @@ class SimpleSnakeGameBenchmark(GameBenchmark):
         return SimpleSnakeGameScorer(self.game_name, experiment, game_instance)
 
 
+class Gameboard:
+    def __init__(self, dim, snake_start_loc, prey_start_loc):
+        self.gameboard = [['' for _ in range(dim)] for _ in range(dim)]
+        self.dim = dim
+
+        # set snake start location
+        self.snake_pos = [snake_start_loc // dim, snake_start_loc % dim]
+        self.gameboard[self.snake_pos[0]][self.snake_pos[1]] = 's'
+
+        # set prey start location
+        self.prey_pos = [prey_start_loc // dim, prey_start_loc % dim]
+        self.gameboard[prey_start_loc // dim][prey_start_loc % dim] = '*'
+
+    def update_gameboard(self, direction) -> str:
+        """Updates the snake location on the gameboard. Returns True if
+        update results in valid game state, otherwise False.
+        """
+        # parse direction and determine new snake location
+        if direction == 'up':
+            row = self.snake_pos[0] - 1
+            col = self.snake_pos[1]
+        elif direction == 'down':
+            row = self.snake_pos[0] + 1
+            col = self.snake_pos[1]
+        elif direction == 'left':
+            row = self.snake_pos[0]
+            col = self.snake_pos[1] - 1
+        elif direction == 'right':
+            row = self.snake_pos[0]
+            col = self.snake_pos[1] + 1
+        else:
+            print(direction)
+            raise RuntimeError('Failed to parse direction.')
+
+        # check game state
+        if row == self.snake_pos[0] and col == self.snake_pos[1]:
+            return 'win state'
+        if (row < 0 or row >= self.dim) or (col < 0 or col >= self.dim):
+            return 'invalid state'
+
+        # move doesn't end game, so update snake pos
+        self.gameboard[self.snake_pos[0]][self.snake_pos[1]] = ''
+        self.snake_pos[0], self.snake_pos[1] = row, col
+        self.gameboard[self.snake_pos[0]][self.snake_pos[1]] = 's'
+        return self.__str__()
+
+    def __str__(self):
+        result = ''
+        for row in self.gameboard:
+            for col in row:
+                result += f'[{col}]'
+
+            if row != self.gameboard[-1]:
+                result += '\n'
+        return result
+
+
 class Navigator(Player):
     def __init__(self, model: Model):
         super().__init__(model)
 
-    def _custom_response(self, context):
-        return f"<MOVE: UP>"
+    def _custom_response(self):
+        return '<move: LEFT>'
 
 
 class Describer(Player):
-    def __init__(self, model: Model):
-        super().__init__(model)
+    def __init__(self, dim, snake_start_loc, prey_start_loc):
+        super().__init__(CustomResponseModel())
+        self.gameboard = Gameboard(dim, snake_start_loc, prey_start_loc)
 
-    def _custom_response(self, context):
-        return "[][][*]\n[][][]\n[][s][]"
+    def _custom_response(self, context: Dict) -> str:
+        content = context['content']
+        return self.gameboard.update_gameboard(content)
+        # return "[][][*]\n[][][]\n[][s][]"
 
 
 class SimpleSnake(DialogueGameMaster):
@@ -50,30 +112,30 @@ class SimpleSnake(DialogueGameMaster):
     
     def __init__(self, game_name: str, game_path: str, experiment: Dict, player_models: List[Model] = None):
         super().__init__(game_name, game_path, experiment, player_models)
-        # READ IN SETTINGS FROM EXPERIMENT/INSTANCE.JSON???
+        # experiment-level variables
         self.max_turns = experiment['max_turns']
+        self.dim = experiment['dim']
         self.describer_initial_prompt = experiment['describer_initial_prompt']
         self.navigator_initial_prompt = experiment['navigator_initial_prompt']
-        self.describer_tag = experiment['describer_tag']
-        self.navigator_tag = experiment['navigator_tag']
 
     def _on_setup(self, **game_instance):
-        # describer should be the programmatic player?
-        self.navigator = Navigator(self.player_models[0])
-        self.add_player(self.navigator)
-        # self.describer = Describer(self.player_models[1])
-        # self.add_player(self.describer)
-
-        self.gameboard = [[None] for _ in range(9)]
         self.invalid_response = False
         self.invalid_format = False
 
+        # instance-level variables
         self.game_instance = game_instance
         self.snake_location = game_instance['snake_start_loc']
         self.prey_location = game_instance['prey_start_loc']
 
+        # instance players
+        self.navigator = Navigator(self.player_models[0])
+        self.add_player(self.navigator)
+        self.describer = Describer(self.dim, self.snake_location, self.prey_location)
+        self.add_player(self.describer)
+
     def _on_before_game(self):
         self.set_context_for(player=self.navigator, content=self.navigator_initial_prompt)
+        self.set_context_for(player=self.describer, content='left')
 
     def _does_game_proceed(self):
         """Proceed as long as the snake does not occupy the same gridspace as the prey."""
@@ -93,7 +155,23 @@ class SimpleSnake(DialogueGameMaster):
             return False
         return True
 
+    def _parse_response(self, player: Player, response: str) -> str:
+        print("parsing...")
+        # if player == self.describer:
+        if player == self.navigator:
+            lowered = response.lower()
+            pattern = r'<move:\s*(up|down|left|right)>'
+            match = re.search(pattern, lowered)
+
+            if match is None:
+                self.invalid_response = True
+            else:
+                return match.group(1)
+
+        return response
+
     def _validate_player_response(self, player: Player, utterance: str) -> bool:
+        print("validating...")
         # reset flags
         self.invalid_response = False
         self.invalid_format = False
@@ -102,16 +180,22 @@ class SimpleSnake(DialogueGameMaster):
         
         if player == self.navigator:
             # is navigator response in valid format?    
-            if not (utterance.startswith(f'<move:') and utterance.endswith('>')):
+            if not (utterance.lower().startswith(f'<move:') and utterance.endswith('>')):
                 self.log_to_self("invalid format", "Invalid response.")
                 self.invalid_format = True
                 return False 
-        # if player == self.describer:
-            # if 
+        elif player == self.describer:
             #validate response format
-            # pass
-        else:
-            return True
+            if utterance == 'invalid state':
+                self.log_to_self("game over", "Game over.")
+                self.invalid_state = True
+                return False
+            if utterance == 'win state':
+                self.log_to_self("game win", "Game win.")
+                self.win_state = True
+                return False
+
+        return True # valid response
 
     def _on_valid_player_response(self, player: Player, parsed_response: str):
         if player == self.navigator:
