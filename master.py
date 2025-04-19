@@ -58,11 +58,11 @@ class Gameboard:
 
     def __str__(self):
         result = ''
-        for row in self.gameboard:
-            for col in row:
-                result += f'[{col}]'
+        for i in range(self.dim):
+            for j in range(self.dim):
+                result += f'[{self.gameboard[i][j]}]'
 
-            if row != self.gameboard[-1]:
+            if i != self.dim - 1:
                 result += '\n'
         return result
 
@@ -195,7 +195,10 @@ class SimpleSnake(DialogueGameMaster):
 
     def _on_valid_player_response(self, player: Player, parsed_response: str):
         if player == self.navigator:
-            self.set_context_for(self.describer, parsed_response)
+            if self.current_round == 0:
+                self.set_context_for(self.describer, 'Get initial grid.')
+            else:
+                self.set_context_for(self.describer, parsed_response)
         elif player == self.describer:
             self.set_context_for(self.navigator, parsed_response)
 
