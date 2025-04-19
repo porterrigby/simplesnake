@@ -5,10 +5,7 @@ from clemcore.backends.model_registry import Model, CustomResponseModel
 from typing import Dict, List
 from clemcore.clemgame.metrics import METRIC_REQUEST_COUNT_VIOLATED, METRIC_REQUEST_COUNT_PARSED, METRIC_REQUEST_COUNT, \
                                         METRIC_REQUEST_SUCCESS, METRIC_ABORTED, BENCH_SCORE, METRIC_SUCCESS, METRIC_LOSE
-
 import logging
-
-
 logger = logging.getLogger(__name__)
 
 
@@ -42,29 +39,13 @@ class Gameboard:
         self.prey_pos = [prey_start_loc // dim, prey_start_loc % dim]
         self.gameboard[prey_start_loc // dim][prey_start_loc % dim] = '*'
 
-    def update_gameboard(self, direction) -> str:
+    def update_gameboard(self, new_loc) -> str:
         """Updates the snake location on the gameboard. Returns True if
         update results in valid game state, otherwise False.
         """
-        # parse direction and determine new snake location
-        if direction == 'up':
-            row = self.snake_pos[0] - 1
-            col = self.snake_pos[1]
-        elif direction == 'down':
-            row = self.snake_pos[0] + 1
-            col = self.snake_pos[1]
-        elif direction == 'left':
-            row = self.snake_pos[0]
-            col = self.snake_pos[1] - 1
-        elif direction == 'right':
-            row = self.snake_pos[0]
-            col = self.snake_pos[1] + 1
-        else:
-            print(direction)
-            raise RuntimeError('Failed to parse direction.')
-
+        row, col = new_loc
         # check game state
-        if row == self.snake_pos[0] and col == self.snake_pos[1]:
+        if row == self.prey_pos[0] and col == self.prey_pos[1]:
             return 'win state'
         if (row < 0 or row >= self.dim) or (col < 0 or col >= self.dim):
             return 'invalid state'
@@ -91,21 +72,41 @@ class Navigator(Player):
         super().__init__(model)
 
     def _custom_response(self):
-        return '<move: LEFT>'
+        return "Alright, I'm ready!"
 
 
 class Describer(Player):
     def __init__(self, dim, snake_start_loc, prey_start_loc):
         super().__init__(CustomResponseModel())
         self.gameboard = Gameboard(dim, snake_start_loc, prey_start_loc)
+        self.init_game_state = True
 
     def _custom_response(self, context: Dict) -> str:
-        content = context['content']
+        if self.init_game_state:
+            self.init_game_state = False
+            return self.gameboard.__str__()
 
-        print('received context: ', content)
+        # parse direction and determine new snake location
+        pattern = r'<move:\s*(up|down|left|right)>'
+        match = re.search(pattern, context['content'].lower())
+        direction = match.group(1)
 
-        return self.gameboard.update_gameboard(content)
-        # return "[][][*]\n[][][]\n[][s][]"
+        if direction == 'up':
+            row = self.gameboard.snake_pos[0] - 1
+            col = self.gameboard.snake_pos[1]
+        elif direction == 'down':
+            row = self.gameboard.snake_pos[0] + 1
+            col = self.gameboard.snake_pos[1]
+        elif direction == 'left':
+            row = self.gameboard.snake_pos[0]
+            col = self.gameboard.snake_pos[1] - 1
+        elif direction == 'right':
+            row = self.gameboard.snake_pos[0]
+            col = self.gameboard.snake_pos[1] + 1
+        else:
+            raise RuntimeError('Failed to parse direction.')
+
+        return self.gameboard.update_gameboard((row, col))
 
 
 class SimpleSnake(DialogueGameMaster):
@@ -118,10 +119,10 @@ class SimpleSnake(DialogueGameMaster):
         # experiment-level variables
         self.max_turns = experiment['max_turns']
         self.dim = experiment['dim']
-        self.describer_initial_prompt = experiment['describer_initial_prompt']
         self.navigator_initial_prompt = experiment['navigator_initial_prompt']
 
     def _on_setup(self, **game_instance):
+        # instance-level flags
         self.invalid_response = False
         self.invalid_format = False
 
@@ -137,8 +138,8 @@ class SimpleSnake(DialogueGameMaster):
         self.add_player(self.describer)
 
     def _on_before_game(self):
-        self.set_context_for(player=self.navigator, content=self.navigator_initial_prompt)
-        # self.set_context_for(player=self.describer, content='left')
+        # self.set_context_for(self.describer, 'game start')
+        self.set_context_for(self.navigator, self.navigator_initial_prompt)
 
     def _does_game_proceed(self):
         """Proceed as long as the snake does not occupy the same gridspace as the prey."""
@@ -147,6 +148,7 @@ class SimpleSnake(DialogueGameMaster):
             return False
         if self.invalid_format:
             self.log_to_self("invalid format", "abort game")
+            return False
         if self.win_state:
             self.log_to_self("game win", "end game")
             return False
@@ -158,41 +160,34 @@ class SimpleSnake(DialogueGameMaster):
             return False
         return True
 
-    def _parse_response(self, player: Player, response: str) -> str:
-        # if player == self.describer:
-        if player == self.navigator:
-            lowered = response.lower()
-            pattern = r'<move:\s*(up|down|left|right)>'
-            match = re.search(pattern, lowered)
-
-            if match is None:
-                self.invalid_response = True
-            else:
-                return match.group(1)
-
-        return response
-
     def _validate_player_response(self, player: Player, utterance: str) -> bool:
         # reset flags
         self.invalid_response = False
         self.invalid_format = False
         self.win_state = False
         self.invalid_state = False
-        
+
         if player == self.navigator:
+            if self.current_round == 0:  # ensure grid is sent during initial round
+                self.log_to_self("game start", "Get initial grid.")
+                return True
+
             # is navigator response in valid format?    
-            if not (utterance.lower().startswith(f'<move:') and utterance.endswith('>')):
+            pattern = r'<move:\s*(up|down|left|right)>'
+            matches = re.findall(pattern, utterance.lower())
+
+            if len(matches) == 0 or len(matches) > 1:
                 self.log_to_self("invalid format", "Invalid response.")
                 self.invalid_format = True
-                return False 
+                return False
         elif player == self.describer:
             # handle end-of-game describer response
             if utterance == 'invalid state':
-                self.log_to_self("game over", "Game over.")
+                self.log_to_self("invalid state", "Game over.")
                 self.invalid_state = True
                 return False
             if utterance == 'win state':
-                self.log_to_self("game win", "Game win.")
+                self.log_to_self("win state", "Game win.")
                 self.win_state = True
                 return False
 

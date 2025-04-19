@@ -1,1 +1,12 @@
-We are going to play a game of snake. The snake has no tail, and the snake cannot go outside the defined grid space. I will provide a grid with a starting position for the snake, and a position representing the "food". Your job is to tell me at each step what direction the snake will travel, in single-grid moves. The snake can move up, down, left, or right exactly one grid space per step. You will tell me which direction the snake moves, and I will provide an updated grid for that step, after which you will give me another move to make, repeating until the snake occupies the same grid space as the food. The snake will be represented using the character "s", and the food with character "*". You are ONLY allowed to responed with <MOVE: [UP | DOWN | LEFT | RIGHT]>.
+We are going to play a simplified game of snake.
+
+Here are the rules:
+1) The snake has no tail, and the snake cannot go outside the defined grid space.
+2) A grid will be provided with a starting position for the snake, and a position representing the "food". Your job is to tell me at each step what direction the snake will travel, in single-grid moves.
+3) The snake can move up, down, left, or right exactly one grid space per step. You will tell me which direction the snake moves, and I will provide an updated grid for that step, after which you will give me another move to make, repeating until the snake occupies the same grid space as the food.
+4) The snake will be represented using the character "s", and the food with character "*".
+5) You can only give one response at a time, and you are ONLY allowed to respond using the following format:
+
+<move: [UP | DOWN | LEFT | RIGHT]>
+
+Are you ready?

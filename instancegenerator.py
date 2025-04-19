@@ -1,5 +1,6 @@
 import os
 import random
+import logging
 from clemcore.clemgame import GameInstanceGenerator
 
 MAX_TURNS = 15
@@ -7,10 +8,14 @@ N_INSTANCES = 10
 GAME_NAME = 'simplesnake'
 SEED = -413  # spring, gymnopedie, air :)
 
+logger = logging.getLogger(__name__)
+
+LANGUAGE = "en"
+
 
 class SimpleSnakeInstanceGenerator(GameInstanceGenerator):
     def __init__(self):
-        super().__init__(os.path.dirname(os.path.abspath(__file__)))
+        super().__init__(os.path.dirname(__file__))
 
     def on_generate(self):
         print("current path:", self.game_path)
@@ -22,7 +27,6 @@ class SimpleSnakeInstanceGenerator(GameInstanceGenerator):
             experiment = self.add_experiment(matrix)
             experiment['dim'] = int(matrix[0])
             experiment['max_turns'] = MAX_TURNS
-            experiment['describer_initial_prompt'] = self.load_template('resources/initial_prompts/describer_prompt')
             experiment['navigator_initial_prompt'] = self.load_template('resources/initial_prompts/navigator_prompt')
 
             instances = []
