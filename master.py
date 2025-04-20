@@ -216,86 +216,57 @@ class SimpleSnakeGameScorer(GameScorer):
         Writes to score file in the episode directory.
         """
         turn_scores = []
-        invalid_response_count = 0
-        invalid_format_count = 0
+        invalid_response = False
         win_state = False
-        invalid_state = False
-        max_turns = self.experiment['max_turns']
-        speed_score = 0
 
         for turn_idx, turn in enumerate(episode_interactions['turns']):
-            turn_score = { 'request_count': 1 }
-            invalid_format_in_turn = False
-            invalid_response_in_turn = False
+            turn_score = {'request_count': 1}
 
-            for event_idx, event in enumerate(turn):
+            for event in turn:
                 action = event['action']
-
-                if action['type'] == 'invalid format':
-                    if event_idx - 1 >= 0:
-                        previous_event = turn[event_idx - 1]
-                        if previous_event['from'] == 'Player 1':  # navigator
-                            invalid_format_count += 1
-                    invalid_format_in_turn = True
-                elif action['type'] == 'invalid response':
-                    if event_idx - 1 >= 0:
-                        previous_event = turn[event_idx - 1]
-                        if previous_event['from'] == 'Player 1':
-                            invalid_response_count += 1
-                    invalid_response_in_turn = True
-                elif action['type'] == 'game win':
+                if action['type'] == 'invalid format' or action['type'] == 'game over':
+                    invalid_response = True
+                if action['type'] == 'win state':
                     win_state = True
-                elif action['type'] == 'game over':
-                    invalid_state = True
-                elif action['type'] == 'max turns reached':  # what should actually happen here?
-                    invalid_state = True
-                    # raise NotImplementedError
 
-                if invalid_format_in_turn or invalid_response_in_turn:
-                    turn_score['violated_request_count'] = 1
-                    turn_score['parsed_request_count'] = 0
-                else:
-                    turn_score['violated_request_count'] = 0
-                    turn_score['parsed_request_count'] = 1
-
-                # self.log_turn_score(turn_idx, 'Accuracy', 1 if win_state else 0)
-                self.log_turn_score(turn_idx, METRIC_REQUEST_COUNT_VIOLATED, turn_score['violated_request_count'])
-                self.log_turn_score(turn_idx, METRIC_REQUEST_COUNT_PARSED, turn_score['parsed_request_count'])
-                self.log_turn_score(turn_idx, METRIC_REQUEST_COUNT, turn_score['request_count'])
-                turn_scores.append(turn_score)
-
-            violated_request_count = sum(turn['violated_request_count'] for turn in turn_scores)
-            self.log_episode_score(METRIC_REQUEST_COUNT_VIOLATED, violated_request_count)
-
-            parsed_request_count = sum(turn['parsed_request_count'] for turn in turn_scores)
-            self.log_episode_score(METRIC_REQUEST_COUNT_PARSED, parsed_request_count)
-
-            request_count = sum(turn['request_count'] for turn in turn_scores)
-            self.log_episode_score(METRIC_REQUEST_COUNT, request_count)
-
-            if request_count != 0:
-                self.log_episode_score(METRIC_REQUEST_SUCCESS, parsed_request_count / request_count)
+            if invalid_response:
+                turn_score['violated_request_count'] = 1
+                turn_score['parsed_request_count'] = 0
             else:
-                self.log_episode_score(METRIC_REQUEST_SUCCESS, 0)
+                turn_score['violated_request_count'] = 0
+                turn_score['parsed_request_count'] = 1
 
-            if invalid_format_in_turn or invalid_response_in_turn:
-                self.log_episode_score(METRIC_ABORTED, 1)
-                self.log_episode_score(BENCH_SCORE, np.nan)
+            self.log_turn_score(turn_idx, 'Accuracy', 1 if win_state else 0)
+            self.log_turn_score(turn_idx, METRIC_REQUEST_COUNT_VIOLATED, turn_score["violated_request_count"])
+            self.log_turn_score(turn_idx, METRIC_REQUEST_COUNT_PARSED, turn_score["parsed_request_count"])
+            self.log_turn_score(turn_idx, METRIC_REQUEST_COUNT, turn_score["request_count"])
+            turn_scores.append(turn_score)
+
+        violated_request_count = sum([turn["violated_request_count"] for turn in turn_scores])
+        self.log_episode_score(METRIC_REQUEST_COUNT_VIOLATED, violated_request_count)
+
+        parsed_request_count = sum([turn["parsed_request_count"] for turn in turn_scores])
+        self.log_episode_score(METRIC_REQUEST_COUNT_PARSED, parsed_request_count)
+
+        request_count = sum([turn["request_count"] for turn in turn_scores])
+        self.log_episode_score(METRIC_REQUEST_COUNT, request_count)
+
+        self.log_episode_score(METRIC_REQUEST_SUCCESS, parsed_request_count / request_count)
+        
+        # Common metrics
+        if invalid_response:  # whether a violation of the game rules happened (response not parsable)
+            self.log_episode_score(METRIC_ABORTED, 1)
+            self.log_episode_score(METRIC_SUCCESS, 0)
+            self.log_episode_score(METRIC_LOSE, 0)
+            # Game-specific metrics
+            self.log_episode_score(BENCH_SCORE, np.nan)  # metric not applicable
+        else:
+            self.log_episode_score(METRIC_ABORTED, 0)
+            if win_state:
+                self.log_episode_score(METRIC_SUCCESS, 1)
+                self.log_episode_score(METRIC_LOSE, 0)
+                self.log_episode_score(BENCH_SCORE, 100 / len(turn_scores))  # how fast the goal was reached
             else:
-                self.log_episode_score(METRIC_ABORTED, 0)
-
-                if win_state:
-                    self.log_episode_score(METRIC_SUCCESS, 1)
-                    self.log_episode_score(METRIC_LOSE, 0)
-
-                    # compute speed score here
-                    speed_score = 100 * (max_turns - request_count) / max_turns
-                    bench_score = max(0, speed_score)
-                    self.log_episode_score('Speed', bench_score)
-                else:
-                    self.log_episode_score(METRIC_SUCCESS, 0)
-                    self.log_episode_score(METRIC_LOSE, 1)
-                    self.log_episode_score(BENCH_SCORE, 0)
-
-            self.log_episode_score("Invalid format from navigator", invalid_format_count)
-            self.log_episode_score("Invalid response from navigator", invalid_response_count)
+                self.log_episode_score(METRIC_SUCCESS, 0)
+                self.log_episode_score(METRIC_LOSE, 1)
+                self.log_episode_score(BENCH_SCORE, 0)
