@@ -1,0 +1,9 @@
+{
+  "game_name": "simplesnake",
+  "description": "A simple game of snake.",
+  "main_game": "simplesnake",
+  "players": "one",
+  "image": "none",
+  "languages": ["en"],
+  "benchmark": ["v2"]
+}

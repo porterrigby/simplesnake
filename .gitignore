@@ -2,5 +2,4 @@
 .jupyter
 *.log
 *.env
-*.json
 __pycache__

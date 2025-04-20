@@ -252,7 +252,7 @@ class SimpleSnakeGameScorer(GameScorer):
         self.log_episode_score(METRIC_REQUEST_COUNT, request_count)
 
         self.log_episode_score(METRIC_REQUEST_SUCCESS, parsed_request_count / request_count)
-        
+
         # Common metrics
         if invalid_response:  # whether a violation of the game rules happened (response not parsable)
             self.log_episode_score(METRIC_ABORTED, 1)
