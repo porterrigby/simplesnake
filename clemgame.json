@@ -1,9 +1,20 @@
-{
-  "game_name": "simplesnake",
-  "description": "A simple game of snake.",
-  "main_game": "simplesnake",
-  "players": "one",
-  "image": "none",
-  "languages": ["en"],
-  "benchmark": ["v2"]
-}
+[
+  {
+    "game_name": "simplesnake",
+    "description": "A simple game of snake.",
+    "main_game": "simplesnake",
+    "players": "one",
+    "image": "none",
+    "languages": ["en"],
+    "benchmark": ["v2"]
+  },
+  {
+    "game_name": "simplesnake_w/obstacles",
+    "description": "A simple game of snake, with obstacles.",
+    "main_game": "simplesnake",
+    "players": "one",
+    "image": "none",
+    "languages": ["en"],
+    "benchmark": ["v2"]
+  }
+]

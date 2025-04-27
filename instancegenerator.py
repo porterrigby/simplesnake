@@ -6,7 +6,7 @@ from clemcore.clemgame import GameInstanceGenerator
 MAX_TURNS = 15
 N_INSTANCES = 10
 GAME_NAME = 'simplesnake'
-SEED = -413  # spring, gymnopedie, air :)
+SEED = -413
 
 logger = logging.getLogger(__name__)
 
@@ -17,33 +17,68 @@ class SimpleSnakeInstanceGenerator(GameInstanceGenerator):
     def __init__(self):
         super().__init__(os.path.dirname(__file__))
 
-    def on_generate(self):
-        print("current path:", self.game_path)
+    def on_generate(self, variant='obstacles'):
         matrices = self.load_file('resources/matrices.txt').strip('\n').split('\n')
 
         for matrix in matrices:
-            experiment = self.add_experiment(matrix)
+            # create new experiment
+            experiment_name = matrix
+            if variant != '':
+                experiment_name = f'{experiment_name}_w/{variant}'
+            experiment = self.add_experiment(experiment_name)
+
+            # store important game values
             dim = int(matrix[0])
             experiment['dim'] = dim
             experiment['max_turns'] = MAX_TURNS
-            experiment['navigator_initial_prompt'] = self.load_template('resources/initial_prompts/navigator_prompt')
+
+            # load needed template resources
+            prompt_path = 'resources/initial_prompts/navigator_prompt'
+            if variant != '':
+                prompt_path = f'{prompt_path}_with_{variant}'
+            experiment['navigator_initial_prompt'] = self.load_template(prompt_path)
 
             instances = []
             for game_id in range(N_INSTANCES):
                 instance = self.add_game_instance(experiment, game_id)
 
-                snake_start_loc = random.choice(range(dim * dim - 1))
+                snake_start_loc = random.choice(range(dim * dim))
                 instance['snake_start_loc'] = snake_start_loc
 
-                possible_prey_locs = list(range(dim * dim - 1))
+                possible_prey_locs = list(range(dim * dim))
                 possible_prey_locs.remove(snake_start_loc)
                 prey_start_loc = random.choice(possible_prey_locs)
                 instance['prey_start_loc'] = prey_start_loc
-                # navigator response pattern (some regex here?)
-                # instance['navigator_response_pattern'] =
+
+                # add obstacle information
+                if variant == 'obstacles':
+                    possible_obs_locs = list(range(dim * dim))
+                    possible_obs_locs = possible_obs_locs[dim+1:-dim]
+
+                    # obs cannot exist on outsider border of grid
+                    possible_obs_locs = [loc for loc in possible_obs_locs if loc % dim != 0 and (loc+1) % dim != 0]
+
+                    # obs cannot exist where other entities are
+                    if snake_start_loc in possible_obs_locs:
+                        possible_obs_locs.remove(snake_start_loc)
+                    if prey_start_loc in possible_obs_locs:
+                        possible_obs_locs.remove(prey_start_loc)
+
+                    # pick up to two obstacles
+                    obstacle_locs = []
+                    for _ in range(2):
+                        if len(possible_obs_locs) > 0:
+                            obstacle_locs.append(random.choice(possible_obs_locs))
+                            possible_obs_locs.remove(obstacle_locs[-1])
+                        else:
+                            break
+
+                    instance['obstacle_locs'] = obstacle_locs
+
                 instances.append(instance)
 
             experiment['game_instances'] = instances
+
 
 
 if __name__ == '__main__':
