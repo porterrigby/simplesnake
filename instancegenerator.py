@@ -17,14 +17,14 @@ class SimpleSnakeInstanceGenerator(GameInstanceGenerator):
     def __init__(self):
         super().__init__(os.path.dirname(__file__))
 
-    def on_generate(self, variant='obstacles'):
+    def on_generate(self, variant=''):
         matrices = self.load_file('resources/matrices.txt').strip('\n').split('\n')
 
         for matrix in matrices:
             # create new experiment
             experiment_name = matrix
             if variant != '':
-                experiment_name = f'{experiment_name}_w/{variant}'
+                experiment_name = f'{experiment_name}_with{variant}'
             experiment = self.add_experiment(experiment_name)
 
             # store important game values
@@ -79,9 +79,12 @@ class SimpleSnakeInstanceGenerator(GameInstanceGenerator):
 
             experiment['game_instances'] = instances
 
+    def generate(self):
+        for variant, filename in zip(['', 'obstacles'], ['instances.json', 'instances_withobstacles.json']):
+            self.on_generate(variant=variant)
+            self.store_file(self.instances, filename, sub_dir="in")
 
 
 if __name__ == '__main__':
     random.seed(SEED)
     SimpleSnakeInstanceGenerator().generate()
-            
