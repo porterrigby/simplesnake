@@ -48,7 +48,7 @@ class Gameboard:
         if row == self.prey_pos[0] and col == self.prey_pos[1]:
             return 'win state'
         if (row < 0 or row >= self.dim) or (col < 0 or col >= self.dim):
-            return 'invalid state'
+            return 'lose state'
 
         # move doesn't end game, so update snake pos
         self.gameboard[self.snake_pos[0]][self.snake_pos[1]] = ''
@@ -124,7 +124,6 @@ class SimpleSnake(DialogueGameMaster):
     def _on_setup(self, **game_instance):
         # instance-level flags
         self.invalid_response = False
-        self.invalid_format = False
 
         # instance-level variables
         self.game_instance = game_instance
@@ -138,34 +137,29 @@ class SimpleSnake(DialogueGameMaster):
         self.add_player(self.describer)
 
     def _on_before_game(self):
-        # self.set_context_for(self.describer, 'game start')
         self.set_context_for(self.navigator, self.navigator_initial_prompt)
 
     def _does_game_proceed(self):
         """Proceed as long as the snake does not occupy the same gridspace as the prey."""
         if self.invalid_response:
-            self.log_to_self("invalid response", "abort game")
-            return False
-        if self.invalid_format:
-            self.log_to_self("invalid format", "abort game")
+            self.log_to_self("invalid_response", "abort game")
             return False
         if self.win_state:
-            self.log_to_self("game win", "end game")
+            self.log_to_self("game_win", "end game")
             return False
-        if self.invalid_state:
-            self.log_to_self("game over", "end game")
+        if self.lose_state:
+            self.log_to_self("game_loss", "end game")
             return False
         if self.current_round >= self.max_turns:
-            self.log_to_self("max turns reached", str(self.max_turns))
+            self.log_to_self("max_turns_reached", str(self.max_turns))
             return False
         return True
 
     def _validate_player_response(self, player: Player, utterance: str) -> bool:
         # reset flags
         self.invalid_response = False
-        self.invalid_format = False
         self.win_state = False
-        self.invalid_state = False
+        self.lose_state = False
 
         if player == self.navigator:
             if self.current_round == 0:  # ensure grid is sent during initial round
@@ -177,17 +171,17 @@ class SimpleSnake(DialogueGameMaster):
             matches = re.findall(pattern, utterance.lower())
 
             if len(matches) == 0 or len(matches) > 1:
-                self.log_to_self("invalid format", "Invalid response.")
-                self.invalid_format = True
+                # self.log_to_self("invalid response", "Invalid response.")
+                self.invalid_response = True
                 return False
         elif player == self.describer:
             # handle end-of-game describer response
-            if utterance == 'invalid state':
-                self.log_to_self("invalid state", "Game over.")
-                self.invalid_state = True
+            if utterance == 'lose state':
+                # self.log_to_self("invalid state", "Game over.")
+                self.lose_state = True
                 return False
             if utterance == 'win state':
-                self.log_to_self("win state", "Game win.")
+                # self.log_to_self("win state", "Game win.")
                 self.win_state = True
                 return False
 
@@ -210,25 +204,34 @@ class SimpleSnakeGameScorer(GameScorer):
 
     def __init__(self, game_name: str, experiment: Dict, game_instance: Dict):
         super().__init__(game_name, experiment, game_instance)
+        self.max_turns = experiment['max_turns']
 
     def compute_scores(self, episode_interactions: Dict) -> None:
         """Episode level scores.
         Writes to score file in the episode directory.
         """
+        bench_score = None
         turn_scores = []
         invalid_response = False
         win_state = False
+        lose_state = False
+        max_turns_reached = False
 
         for turn_idx, turn in enumerate(episode_interactions['turns']):
             turn_score = {'request_count': 1}
 
             for event in turn:
                 action = event['action']
-                if action['type'] == 'invalid format' or action['type'] == 'game over':
+                if action['type'] == 'invalid_response':
                     invalid_response = True
-                if action['type'] == 'win state':
+                if action['type'] == 'game_loss':
+                    lose_state = True
+                if action['type'] == 'game_win':
                     win_state = True
+                if action['type'] == 'max_turns_reached':
+                    max_turns_reached = True
 
+            # check if LM followed correct formatting rules
             if invalid_response:
                 turn_score['violated_request_count'] = 1
                 turn_score['parsed_request_count'] = 0
@@ -236,10 +239,9 @@ class SimpleSnakeGameScorer(GameScorer):
                 turn_score['violated_request_count'] = 0
                 turn_score['parsed_request_count'] = 1
 
-            self.log_turn_score(turn_idx, 'Accuracy', 1 if win_state else 0)
-            self.log_turn_score(turn_idx, METRIC_REQUEST_COUNT_VIOLATED, turn_score["violated_request_count"])
-            self.log_turn_score(turn_idx, METRIC_REQUEST_COUNT_PARSED, turn_score["parsed_request_count"])
             self.log_turn_score(turn_idx, METRIC_REQUEST_COUNT, turn_score["request_count"])
+            self.log_turn_score(turn_idx, METRIC_REQUEST_COUNT_PARSED, turn_score["parsed_request_count"])
+            self.log_turn_score(turn_idx, METRIC_REQUEST_COUNT_VIOLATED, turn_score["violated_request_count"])
             turn_scores.append(turn_score)
 
         violated_request_count = sum([turn["violated_request_count"] for turn in turn_scores])
@@ -258,15 +260,19 @@ class SimpleSnakeGameScorer(GameScorer):
             self.log_episode_score(METRIC_ABORTED, 1)
             self.log_episode_score(METRIC_SUCCESS, 0)
             self.log_episode_score(METRIC_LOSE, 0)
-            # Game-specific metrics
-            self.log_episode_score(BENCH_SCORE, np.nan)  # metric not applicable
+            bench_score = np.nan  # metric not applicable
         else:
-            self.log_episode_score(METRIC_ABORTED, 0)
-            if win_state:
+            if win_state:  # no rule violations, and reached goal
                 self.log_episode_score(METRIC_SUCCESS, 1)
                 self.log_episode_score(METRIC_LOSE, 0)
-                self.log_episode_score(BENCH_SCORE, 100 / len(turn_scores))  # how fast the goal was reached
-            else:
+                bench_score = 100  # assign 100% score for game win
+            elif lose_state:  # game was lost
                 self.log_episode_score(METRIC_SUCCESS, 0)
                 self.log_episode_score(METRIC_LOSE, 1)
-                self.log_episode_score(BENCH_SCORE, 0)
+                bench_score = 0
+            elif max_turns_reached:  # goal was never found and turns were exceeded
+                self.log_episode_score(METRIC_SUCCESS, 0)
+                self.log_episode_score(METRIC_LOSE, 1)
+                bench_score = 0
+            self.log_episode_score(METRIC_ABORTED, 0)
+        self.log_episode_score(BENCH_SCORE, bench_score)
