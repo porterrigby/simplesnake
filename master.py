@@ -27,7 +27,7 @@ class SimpleSnakeGameBenchmark(GameBenchmark):
 
 
 class Gameboard:
-    def __init__(self, dim, snake_start_loc, prey_start_loc):
+    def __init__(self, dim, snake_start_loc, prey_start_loc, obstacles=None):
         self.gameboard = [['' for _ in range(dim)] for _ in range(dim)]
         self.dim = dim
 
@@ -39,6 +39,13 @@ class Gameboard:
         self.prey_pos = [prey_start_loc // dim, prey_start_loc % dim]
         self.gameboard[prey_start_loc // dim][prey_start_loc % dim] = '*'
 
+        # set obstacle locations
+        self.obstacles = []
+        if obstacles is not None:
+            for ob in obstacles:
+                self.obstacles.append([ob // dim, ob % dim])
+                self.gameboard[ob // dim][ ob % dim] = 'X'
+
     def update_gameboard(self, new_loc) -> str:
         """Updates the snake location on the gameboard. Returns True if
         update results in valid game state, otherwise False.
@@ -49,6 +56,9 @@ class Gameboard:
             return 'win state'
         if (row < 0 or row >= self.dim) or (col < 0 or col >= self.dim):
             return 'lose state'
+        for ob in self.obstacles:
+            if row == ob[0] and col == ob[1]:
+                return 'lose state'
 
         # move doesn't end game, so update snake pos
         self.gameboard[self.snake_pos[0]][self.snake_pos[1]] = ''
@@ -76,10 +86,11 @@ class Navigator(Player):
 
 
 class Describer(Player):
-    def __init__(self, dim, snake_start_loc, prey_start_loc):
+    def __init__(self, dim, snake_start_loc, prey_start_loc, obstacle_locs, match_pattern):
         super().__init__(CustomResponseModel())
-        self.gameboard = Gameboard(dim, snake_start_loc, prey_start_loc)
+        self.gameboard = Gameboard(dim, snake_start_loc, prey_start_loc, obstacle_locs)
         self.init_game_state = True
+        self.pattern = match_pattern
 
     def _custom_response(self, context: Dict) -> str:
         if self.init_game_state:
@@ -87,8 +98,7 @@ class Describer(Player):
             return self.gameboard.__str__()
 
         # parse direction and determine new snake location
-        pattern = r'<move:\s*(up|down|left|right)>'
-        match = re.search(pattern, context['content'].lower())
+        match = re.search(self.pattern, context['content'].lower())
         direction = match.group(1)
 
         if direction == 'up':
@@ -120,8 +130,14 @@ class SimpleSnake(DialogueGameMaster):
         self.max_turns = experiment['max_turns']
         self.dim = experiment['dim']
         self.navigator_initial_prompt = experiment['navigator_initial_prompt']
+        # self.navigator_response_pattern = r'^<move:\s*(up|down|left|right)>$'
+        self.navigator_response_pattern = experiment['navigator_response_pattern']
+        self.navigator_reprompt = experiment['navigator_reprompt']
 
     def _on_setup(self, **game_instance):
+        self.pass_turn = True
+        self.is_warned = False
+
         # instance-level flags
         self.invalid_response = False
 
@@ -130,10 +146,23 @@ class SimpleSnake(DialogueGameMaster):
         self.snake_location = game_instance['snake_start_loc']
         self.prey_location = game_instance['prey_start_loc']
 
+
         # instance players
         self.navigator = Navigator(self.player_models[0])
         self.add_player(self.navigator)
-        self.describer = Describer(self.dim, self.snake_location, self.prey_location)
+
+        if 'obstacles' in self.game_name:
+            self.obstacle_locs = game_instance['obstacle_locs']
+        else:
+            self.obstacle_locs = None
+
+        self.describer = Describer(
+            self.dim,
+            self.snake_location,
+            self.prey_location,
+            self.obstacle_locs,
+            self.navigator_response_pattern
+        )
         self.add_player(self.describer)
 
     def _on_before_game(self):
@@ -167,21 +196,26 @@ class SimpleSnake(DialogueGameMaster):
                 return True
 
             # is navigator response in valid format?    
-            pattern = r'<move:\s*(up|down|left|right)>'
-            matches = re.findall(pattern, utterance.lower())
-
+            matches = re.findall(self.navigator_response_pattern, utterance.lower())
             if len(matches) == 0 or len(matches) > 1:
-                # self.log_to_self("invalid response", "Invalid response.")
-                self.invalid_response = True
-                return False
+                if self.is_warned:  # Reprompting failed
+                    self.invalid_response = True
+                    return False
+                else:  # Skip describer's turn and reprompt navigator
+                    self.pass_turn = False
+                    self.set_context_for(self.navigator, self.navigator_reprompt)
+                    self.is_warned = True
+                    return True
+
+            # Reset flags after they've been used to skip describer
+            self.is_warned = False
+            self.pass_turn = True
         elif player == self.describer:
             # handle end-of-game describer response
             if utterance == 'lose state':
-                # self.log_to_self("invalid state", "Game over.")
                 self.lose_state = True
                 return False
             if utterance == 'win state':
-                # self.log_to_self("win state", "Game win.")
                 self.win_state = True
                 return False
 
@@ -195,6 +229,9 @@ class SimpleSnake(DialogueGameMaster):
                 self.set_context_for(self.describer, parsed_response)
         elif player == self.describer:
             self.set_context_for(self.navigator, parsed_response)
+
+    def _should_pass_turn(self):
+        return self.pass_turn
 
 
 class SimpleSnakeGameScorer(GameScorer):

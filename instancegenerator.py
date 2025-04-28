@@ -17,13 +17,13 @@ class SimpleSnakeInstanceGenerator(GameInstanceGenerator):
     def __init__(self):
         super().__init__(os.path.dirname(__file__))
 
-    def on_generate(self, variant=''):
+    def on_generate(self, variant=None):
         matrices = self.load_file('resources/matrices.txt').strip('\n').split('\n')
 
         for matrix in matrices:
             # create new experiment
             experiment_name = matrix
-            if variant != '':
+            if variant is not None:
                 experiment_name = f'{experiment_name}_with{variant}'
             experiment = self.add_experiment(experiment_name)
 
@@ -34,9 +34,15 @@ class SimpleSnakeInstanceGenerator(GameInstanceGenerator):
 
             # load needed template resources
             prompt_path = 'resources/initial_prompts/navigator_prompt'
-            if variant != '':
+            if variant is not None:
                 prompt_path = f'{prompt_path}_with_{variant}'
             experiment['navigator_initial_prompt'] = self.load_template(prompt_path)
+
+            prompt_path = 'resources/reprompts/navigator_reprompt'
+            experiment['navigator_reprompt'] = self.load_template(prompt_path)
+
+            prompt_path = 'resources/patterns/navigator_response'
+            experiment['navigator_response_pattern'] = self.load_template(prompt_path)
 
             instances = []
             for game_id in range(N_INSTANCES):
@@ -79,12 +85,12 @@ class SimpleSnakeInstanceGenerator(GameInstanceGenerator):
 
             experiment['game_instances'] = instances
 
-    def generate(self):
-        for variant, filename in zip(['', 'obstacles'], ['instances.json', 'instances_withobstacles.json']):
-            self.on_generate(variant=variant)
-            self.store_file(self.instances, filename, sub_dir="in")
+    def generate(self, variant, filename):
+        self.on_generate(variant=variant)
+        self.store_file(self.instances, filename, sub_dir="in")
 
 
 if __name__ == '__main__':
     random.seed(SEED)
-    SimpleSnakeInstanceGenerator().generate()
+    SimpleSnakeInstanceGenerator().generate(None, 'instances.json')
+    SimpleSnakeInstanceGenerator().generate('obstacles', 'instances_withobstacles.json')

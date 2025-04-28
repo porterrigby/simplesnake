@@ -6,7 +6,7 @@
     "players": "one",
     "image": "none",
     "languages": ["en"],
-    "benchmark": ["v2"]
+    "benchmark": ["2.0"]
   },
   {
     "game_name": "simplesnake_withobstacles",
@@ -16,6 +16,6 @@
     "players": "one",
     "image": "none",
     "languages": ["en"],
-    "benchmark": ["v2"]
+    "benchmark": ["2.0"]
   }
 ]
