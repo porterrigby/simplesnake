@@ -17,5 +17,15 @@
     "image": "none",
     "languages": ["en"],
     "benchmark": ["2.0"]
+  },
+  {
+    "game_name": "simplesnake_withplanning",
+    "description": "A simple game of snake played via planning.",
+    "main_game": "simplesnake",
+    "instances": "instances_withplanning",
+    "players": "one",
+    "image": "none",
+    "languages": ["en"],
+    "benchmark": ["2.0"]
   }
 ]

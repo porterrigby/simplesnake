@@ -42,6 +42,8 @@ class SimpleSnakeInstanceGenerator(GameInstanceGenerator):
             experiment['navigator_reprompt'] = self.load_template(prompt_path)
 
             prompt_path = 'resources/patterns/navigator_response'
+            if variant == 'planning':
+                prompt_path = f'{prompt_path}_with_{variant}'
             experiment['navigator_response_pattern'] = self.load_template(prompt_path)
 
             instances = []
@@ -94,3 +96,4 @@ if __name__ == '__main__':
     random.seed(SEED)
     SimpleSnakeInstanceGenerator().generate(None, 'instances.json')
     SimpleSnakeInstanceGenerator().generate('obstacles', 'instances_withobstacles.json')
+    SimpleSnakeInstanceGenerator().generate('planning', 'instances_withplanning.json')
