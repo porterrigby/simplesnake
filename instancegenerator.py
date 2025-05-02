@@ -3,7 +3,7 @@ import random
 import logging
 from clemcore.clemgame import GameInstanceGenerator
 
-MAX_TURNS = 15
+MAX_TURNS = 20
 N_INSTANCES = 10
 GAME_NAME = 'simplesnake'
 SEED = -413
@@ -74,7 +74,7 @@ class SimpleSnakeInstanceGenerator(GameInstanceGenerator):
 
                     # pick up to two obstacles
                     obstacle_locs = []
-                    for _ in range(2):
+                    for _ in range(3):  # 3 is the max number of obstacles that doesn't risk being unplayable
                         if len(possible_obs_locs) > 0:
                             obstacle_locs.append(random.choice(possible_obs_locs))
                             possible_obs_locs.remove(obstacle_locs[-1])

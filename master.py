@@ -100,7 +100,6 @@ class Describer(Player):
         # parse direction and determine new snake location
         directions = re.findall(self.pattern, context['content'].lower())
         row, col = 0, 0
-        print(directions)
         state = None
         for direction in directions:
             if direction == 'up':
