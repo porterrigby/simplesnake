@@ -3,3 +3,5 @@
 *.log
 *.env
 __pycache__
+*.zip
+*.png
