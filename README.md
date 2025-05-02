@@ -1,7 +1,8 @@
 # SimpleSnake
+A Clembench game for evaluating LLMs on 2D text-based spatial reasoning tasks.
 
 ### Installation
-SimpleSnake requires that [Clemcore]() and [Clembench]() are already installed and functioning on your system.
+SimpleSnake requires that [Clemcore](https://github.com/clp-research/clemcore) and [Clembench](https://github.com/clp-research/clembench) are already installed and functioning on your system.
 
 After verifying Clembench is correctly installed, clone the repository into your local clembench 
 directory alongside existing games.
