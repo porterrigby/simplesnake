@@ -27,6 +27,10 @@ A variation of the game that focuses on up-front planning instead of incremental
 ```bash
 clem run -g simplesnake_withplanning -m <model-to-evaluate-on>
 ```
+
+Clembench supports various model backends and APIs. Run ```clem list models``` for a list of what models are currently 
+supported.
+
 ---
 
 ### Transcription and Evaluation
